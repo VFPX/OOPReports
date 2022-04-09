@@ -2,7 +2,7 @@
 
 **Provides object-oriented reports for use in Visual FoxPro 9.0 development**
 
-Project Manager: [Doug Hennig](mailto:dhennig@stonefield.com)
+Project Manager: [Doug Hennig](mailto:dhennig@stonefieldquery.com)
 
 ## Introduction
 
@@ -363,3 +363,13 @@ next lnI
 
 ## Conclusion
 Although you might write a fair bit of code to create an FRX using the report object classes, the code is simple: create some objects and set their properties. It sure beats writing 50 INSERT INTO statement with 75 fields to fill for each. Please report (pun intended) to me any suggestions you have for improvements.
+
+## Helping with this project
+
+See [How to contribute to OOP Reports](.github/CONTRIBUTING.md) for details on how to help with this project.
+
+## Releases
+
+### 2019-06-27
+
+* Initial release.
