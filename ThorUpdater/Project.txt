@@ -1,0 +1,5 @@
+appName = OOP Reports
+appID = OOPReports
+majorVersion = 1.0
+excludeFiles = *.fxp,*.md,.gitignore,*.docx,*.zip,*.pjx,*.pjt
+excludeFolders = *ThorUpdater*,*HTMLHelp*,*Documentation*
