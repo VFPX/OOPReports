@@ -67,7 +67,7 @@ try
     }
 
     # clean up
-    Get-Variable -exclude Runspace | Where-Object {$_.Value -is [System.IDisposable]} | Foreach-Object {$_.Value.Dispose(); Remove-Variable $_.Name};
+	Get-Variable -exclude Runspace | Where-Object {$_.Value -is [System.IDisposable]} | Foreach-Object {$_.Value.Dispose(); Remove-Variable $_.Name};
 
     # If the zip file was created, read in the Version source file, replace
     # placeholders, and write out the project version file.
@@ -100,4 +100,5 @@ finally
 {
 # Move back to the ThorUpdater folder
     cd ThorUpdater
-} 
+}
+

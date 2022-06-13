@@ -2,7 +2,7 @@
 * File:				SFRepObj.h
 * Purpose:			Constants for SFRepObj.vcx
 * Author:			Doug Hennig
-* Last Revision:	12/07/2018
+* Last Revision:	10/09/2019
 *==============================================================================
 
 * Include other constants.
@@ -196,6 +196,38 @@
 #define cnLANDSCAPE_WIDTH             105000
 #define cnLANDLEGAL_WIDTH             140000
 #define cnPRINTER_MARGIN              0.5
+
+* Orientation.
+
+#define cnORIENTATION_AUTO            0
+#define cnORIENTATION_PORTRAIT        1
+#define cnORIENTATION_LANDSCAPE       2
+
+* Ruler scale.
+
+#define cnRULER_INCHES                1
+#define cnRULER_METRIC                2
+#define cnRULER_PIXELS                3
+
+* Pen patterns.
+
+#define cnPEN_PATTERN_NONE            0
+#define cnPEN_PATTERN_DOTTED          1
+#define cnPEN_PATTERN_DASDHED         2
+#define cnPEN_PATTERN_DASH_DOT        3
+#define cnPEN_PATTERN_DASH_DOT_DOT    4
+#define cnPEN_PATTERN_NORMAL          8
+
+* Fill patterns.
+
+#define cnFILL_PATTERN_NONE           0
+#define cnFILL_PATTERN_SOLID          1
+#define cnFILL_PATTERN_HLINES         2
+#define cnFILL_PATTERN_VLINES         3
+#define cnFILL_PATTERN_DLINES_LEFT    4
+#define cnFILL_PATTERN_DLINES_RIGHT   5
+#define cnFILL_PATTERN_GRID           6
+#define cnFILL_PATTERN_HATCH          7
 
 * Report protection bit positions.
 

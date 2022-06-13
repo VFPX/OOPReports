@@ -32,7 +32,7 @@ DEFINE CLASS sfreportband AS sfreportrecord OF "sfrepobj.vcx" 		&& Report band c
 		*p: oreport		&& A reference to the SFReportFile object that instantiated us
 	*</DefinedPropArrayMethod>
 
-	PROTECTED cbandtype,oitems,oreport
+	PROTECTED oitems,oreport
 	cbandtype = 		&& The band type
 	conentry = 		&& The "on entry" expression for the band
 	conexit = 		&& The "on exit" expression for the band
@@ -51,7 +51,6 @@ DEFINE CLASS sfreportband AS sfreportrecord OF "sfrepobj.vcx" 		&& Report band c
 	oitems = 		&& A collection of report objects in the band
 	oreport = .NULL.		&& A reference to the SFReportFile object that instantiated us
 	_memberdata = <VFPData>
-		<memberdata name="cbandtype" type="property" display="cBandType"/>
 		<memberdata name="conentry" type="property" display="cOnEntry"/>
 		<memberdata name="conentry_assign" type="method" display="cOnEntry_Assign"/>
 		<memberdata name="conexit" type="property" display="cOnExit"/>
@@ -78,6 +77,7 @@ DEFINE CLASS sfreportband AS sfreportrecord OF "sfrepobj.vcx" 		&& Report band c
 		<memberdata name="ncount" display="nCount"/>
 		<memberdata name="ncount_access" display="nCount_Access"/>
 		<memberdata name="oitems" display="oItems"/>
+		<memberdata name="cbandtype" display="cBandType"/>
 		</VFPData>
 	
 	PROCEDURE add		&& Adds a new report item to the band
@@ -105,7 +105,11 @@ DEFINE CLASS sfreportband AS sfreportrecord OF "sfrepobj.vcx" 		&& Report band c
 					case lcObjType = ccOBJECT_BOX
 						lcClass = 'SFReportBox'
 				endcase
-				loItem = newobject(lcClass, .ClassLibrary, '', .oReport)
+				if upper(.ClassLibrary) $ set('CLASSLIB')
+					loItem = createobject(lcClass, .oReport)
+				else
+					loItem = newobject(lcClass, .ClassLibrary, '', .oReport)
+				endif upper(.ClassLibrary) $ set('CLASSLIB')
 			else
 				loItem = tuType
 			endif vartype(tuType) = 'C'
@@ -964,7 +968,6 @@ DEFINE CLASS sfreportfield AS sfreportobject OF "sfrepobj.vcx" 		&& Report field
 		<memberdata name="nfontcharset" display="nFontCharSet"/>
 		<memberdata name="nresetondetail" display="nResetOnDetail"/>
 		<memberdata name="lexpressiontoolong" display="lExpressionTooLong"/>
-		<memberdata name="nheight" display="nHeight"/>
 		<memberdata name="getdefaultheight" display="GetDefaultHeight"/>
 		</VFPData>
 	
@@ -1318,6 +1321,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		*p: nband		&& The current band number being processed
 		*p: ncolumns		&& The number of columns in the report
 		*p: ncolumnspacing		&& The spacing between columns
+		*p: ncustomwidth		&& The custom paper width to use
 		*p: ndefaultsource		&& The default paper source for the report
 		*p: ndetailbands		&& The number of detail bands in the report
 		*p: nfirstobject		&& The record number for the first non-band object in the report
@@ -1335,7 +1339,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		*p: nrepwidth		&& The calculated report width
 		*p: nrulerscale		&& The scale used for the ruler: 1 = inches, 2 = metric, 3 = pixels
 		*p: nvfactor		&& The factor to convert a vertical character unit to a report unit
-		*p: nwidth		&& The report width
+		*p: nwidth		&& The width of a column; -1 if there's only 1 column
 		*p: ocolumnfooterband		&& An object reference to the column footer band object
 		*p: ocolumnheaderband		&& An object reference to the column header band object
 		*p: ode		&& An object reference to the object for the DataEnvironment record
@@ -1377,6 +1381,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 	nband = 0		&& The current band number being processed
 	ncolumns = 1		&& The number of columns in the report
 	ncolumnspacing = 0		&& The spacing between columns
+	ncustomwidth = 0		&& The custom paper width to use
 	ndefaultsource = -1		&& The default paper source for the report
 	ndetailbands = 0		&& The number of detail bands in the report
 	nfirstobject = 0		&& The record number for the first non-band object in the report
@@ -1394,7 +1399,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 	nrepwidth = 0		&& The calculated report width
 	nrulerscale = 1		&& The scale used for the ruler: 1 = inches, 2 = metric, 3 = pixels
 	nvfactor = 0		&& The factor to convert a vertical character unit to a report unit
-	nwidth = 0		&& The report width
+	nwidth = -1		&& The width of a column; -1 if there's only 1 column
 	ocolumnfooterband = .NULL.		&& An object reference to the column footer band object
 	ocolumnheaderband = .NULL.		&& An object reference to the column header band object
 	ode = .NULL.		&& An object reference to the object for the DataEnvironment record
@@ -1509,6 +1514,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		<memberdata name="adetailbands" display="aDetailBands"/>
 		<memberdata name="aobjectgroups" display="aObjectGroups"/>
 		<memberdata name="getprinterinfo" display="GetPrinterInfo"/>
+		<memberdata name="ncustomwidth" display="nCustomWidth"/>
 		</VFPData>
 	
 	PROCEDURE cfontname_assign
@@ -1520,34 +1526,56 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 
 	PROCEDURE createdetailband		&& Creates a detail band
 		lparameters tlHeaderFooter
-		local lnDetail
+		local lnDetail, ;
+			llOpen
 		with This
 			lnDetail = iif(isnull(.aDetailBands[1, 1]), 1, alen(.aDetailBands, 1) + 1)
+			llOpen   = upper(.ClassLibrary) $ set('CLASSLIB')
 			dimension .aDetailBands[lnDetail, 3]
-			.aDetailBands[lnDetail, 1] = newobject('SFReportBand', .ClassLibrary, '', ;
-				ccBAND_DETAIL, This)
-			if tlHeaderFooter
-				.aDetailBands[lnDetail, 2] = newobject('SFReportBand', .ClassLibrary, ;
-					'', ccBAND_DETAIL_HEADER, This)
-				.aDetailBands[lnDetail, 3] = newobject('SFReportBand', .ClassLibrary, ;
-					'', ccBAND_DETAIL_FOOTER, This)
+			if llOpen
+				.aDetailBands[lnDetail, 1] = createobject('SFReportBand', ;
+					ccBAND_DETAIL, This)
 			else
-				.aDetailBands[lnDetail, 2] = .NULL.
-				.aDetailBands[lnDetail, 3] = .NULL.
-			endif tlHeaderFooter
+				.aDetailBands[lnDetail, 1] = newobject('SFReportBand', ;
+					.ClassLibrary, '', ccBAND_DETAIL, This)
+			endif llOpen
+			do case
+				case not tlHeaderFooter
+					.aDetailBands[lnDetail, 2] = .NULL.
+					.aDetailBands[lnDetail, 3] = .NULL.
+				case llOpen
+					.aDetailBands[lnDetail, 2] = createobject('SFReportBand', ;
+						ccBAND_DETAIL_HEADER, This)
+					.aDetailBands[lnDetail, 3] = createobject('SFReportBand', ;
+						ccBAND_DETAIL_FOOTER, This)
+				otherwise
+					.aDetailBands[lnDetail, 2] = newobject('SFReportBand', ;
+						.ClassLibrary, '', ccBAND_DETAIL_HEADER, This)
+					.aDetailBands[lnDetail, 3] = newobject('SFReportBand', ;
+						.ClassLibrary, '', ccBAND_DETAIL_FOOTER, This)
+			endcase
 		endwith
 		
 	ENDPROC
 
 	PROCEDURE creategroupband		&& Creates a new group band
-		local lnGroup
+		local lnGroup, ;
+			llOpen
 		with This
 			lnGroup = iif(isnull(.aGroupBands[1, 1]), 1, alen(.aGroupBands, 1) + 1)
+			llOpen  = upper(.ClassLibrary) $ set('CLASSLIB')
 			dimension .aGroupBands[lnGroup, 2]
-			.aGroupBands[lnGroup, 1] = newobject('SFReportGroup', .ClassLibrary, '', ;
-				ccBAND_GROUP_HEADER, This)
-			.aGroupBands[lnGroup, 2] = newobject('SFReportGroup', .ClassLibrary, '', ;
-				ccBAND_GROUP_FOOTER, This)
+			if llOpen
+				.aGroupBands[lnGroup, 1] = createobject('SFReportGroup', ;
+					ccBAND_GROUP_HEADER, This)
+				.aGroupBands[lnGroup, 2] = createobject('SFReportGroup', ;
+					ccBAND_GROUP_FOOTER, This)
+			else
+				.aGroupBands[lnGroup, 1] = newobject('SFReportGroup', .ClassLibrary, ;
+					'', ccBAND_GROUP_HEADER, This)
+				.aGroupBands[lnGroup, 2] = newobject('SFReportGroup', .ClassLibrary, ;
+					'', ccBAND_GROUP_FOOTER, This)
+			endif llOpen
 		endwith
 		
 	ENDPROC
@@ -1612,7 +1640,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			loVariable
 		with This
 			lnVariable = iif(isnull(.aVariables[1]), 1, alen(.aVariables) + 1)
-			loVariable = newobject('SFReportVariable', .ClassLibrary)
+			if upper(.ClassLibrary) $ set('CLASSLIB')
+				loVariable = createobject('SFReportVariable')
+			else
+				loVariable = newobject('SFReportVariable', .ClassLibrary)
+			endif upper(.ClassLibrary) $ set('CLASSLIB')
 			dimension .aVariables[lnVariable]
 			.aVariables[lnVariable] = loVariable
 		endwith
@@ -1704,6 +1736,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 					lnDefWidth  = loPrinter.nPrintableAreaWidthInch
 					lnDefLength = loPrinter.nPrintableAreaHeightInch
 				endif .lWholePage
+				if type('oLogger') = 'O'
+					oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: defwidth=' + ;
+						transform(lnDefWidth) + ', deflength=' + transform(lnDefLength) + ;
+						', nPaperSize=' + transform(.nPaperSize))
+				endif type('oLogger') = 'O'
 				lnHMargin = loPrinter.nPrinterMarginLeftInch + ;
 					loPrinter.nPrinterMarginRightInch
 				lnVMargin = loPrinter.nPrinterMarginTopInch + ;
@@ -1711,6 +1748,10 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 				if left(transform(lnHMargin), 1) = '*'
 					store cnPRINTER_MARGIN to lnHMargin, lnVMargin
 				endif left(transform(lnHMargin), 1) = '*'
+				if type('oLogger') = 'O'
+					oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: H margin=' + ;
+						transform(lnHMargin) + ', V margin=' + transform(lnVMargin))
+				endif type('oLogger') = 'O'
 				lcLibrary = 'PrinterForms.prg'
 		
 		* Get the paper size.
@@ -1722,6 +1763,10 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 					case between(.nPaperSize, 1, alen(.aPaper, 1))
 						lnWidth  = .aPaper[.nPaperSize, 1]
 						lnLength = .aPaper[.nPaperSize, 2]
+						if type('oLogger') = 'O'
+							oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+								'using standard paper size ' + transform(.nPaperSize))
+						endif type('oLogger') = 'O'
 		
 		* If we have a custom paper size, get the dimensions.
 		
@@ -1731,6 +1776,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 							.cErrorMessage = 'ERR_NO_CONVERT.FLL'
 						else
 							loForms.GetPrinterForms()
+							.cErrorMessage = loForms.cErrorMessage
 							do case
 		
 		* The custom size was found, so get its dimensions.
@@ -1738,20 +1784,43 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 								case between(.nPaperSize, 1, alen(loForms.aForms))
 									lnWidth  = loForms.aForms[.nPaperSize].Size.cx
 									lnLength = loForms.aForms[.nPaperSize].Size.cy
+									if type('oLogger') = 'O'
+										oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+											'custom paper size: width=' + transform(lnWidth) + ;
+											', length=' + transform(lnLength))
+									endif type('oLogger') = 'O'
 		
 		* The custom size wasn't found but we have a defined width, so use it.
 		
-								case .nWidth <> 0
+								case .nCustomWidth <> 0
 									lnWidth = -1
+									if type('oLogger') = 'O'
+										oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+											'paper size ' + transform(.nPaperSize) + ;
+											' was not found; using set sizes ')
+									endif type('oLogger') = 'O'
 		
 		* The custom size wasn't found so use the default sizes.
 		
 								otherwise
 									lnWidth  = lnDefWidth
 									lnLength = lnDefLength
+									if type('oLogger') = 'O'
+										oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+											'paper size ' + transform(.nPaperSize) + ;
+											' was not found; using default sizes ')
+									endif type('oLogger') = 'O'
 							endcase
 						endif vartype(loForms) <> 'O' ...
+					case type('oLogger') = 'O'
+						oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+							'did not get dimensions')
 				endcase
+			else
+				if type('oLogger') = 'O'
+					oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+						'could not read printer info')
+				endif type('oLogger') = 'O'
 			endif vartype(loPrinter) = 'O' ...
 		
 		* If a printer error occurred, assume 8.5 x 11.
@@ -1759,6 +1828,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			if lnWidth = 0
 				lnWidth  = .aPaper[1, 1]
 				lnLength = .aPaper[1, 2]
+				if type('oLogger') = 'O'
+					oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+						'no dimensions found. Using letter size. Error message = ' + ;
+						.cErrorMessage)
+				endif type('oLogger') = 'O'
 			endif lnWidth = 0
 		
 		* Now subtract printer margins and round down to one decimal place; some
@@ -1774,10 +1848,14 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* than the printer page width or we have an unfound custom paper size, use it
 		* instead.
 		
-			lnPageWidth = abs(.nWidth)/cnREPORT_UNITS
-			if .nWidth < 0 and (lnPageWidth < lnWidth or lnWidth < 0)
+			lnPageWidth = abs(.nCustomWidth)/cnREPORT_UNITS
+			if .nCustomWidth < 0 and (lnPageWidth < lnWidth or lnWidth < 0)
 				lnWidth = lnPageWidth
-			endif .nWidth < 0 ...
+				if type('oLogger') = 'O'
+					oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: ' + ;
+						'using defined paper width: ' + transform(lnPageWidth))
+				endif type('oLogger') = 'O'
+			endif .nCustomWidth < 0 ...
 		
 		* Set the minimum paper width.
 		
@@ -1792,6 +1870,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 				lnLength = lnTemp
 				.lUsingLandscape = .T.
 			endif tlLandscape ...
+			if type('oLogger') = 'O'
+				oLogger.LogElapsedMilestone('SFReportFile.GetPaperWidth: width=' + ;
+					transform(lnWidth) + ', length=' + transform(lnLength) + ;
+					iif(.lUsingLandscape, ', using landscape', ''))
+			endif type('oLogger') = 'O'
 		
 		* Save the dimensions.
 		
@@ -1913,7 +1996,8 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			tnNumber
 		local lcBand, ;
 			loBand, ;
-			lnNumber
+			lnNumber, ;
+			llOpen
 		with This
 			assert vartype(tcBand) = 'C' and inlist(upper(tcBand), ;
 				ccBAND_PAGE_HEADER, ccBAND_PAGE_FOOTER, ccBAND_DETAIL, ccBAND_TITLE, ;
@@ -1931,6 +2015,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			lcBand   = upper(tcBand)
 			loBand   = .NULL.
 			lnNumber = iif(vartype(tnNumber) $ 'NFIBY', tnNumber, 0)
+			llOpen   = upper(.ClassLibrary) $ set('CLASSLIB')
 			do case
 				case lcBand = ccBAND_PAGE_HEADER
 					loBand = .oPageHeaderBand
@@ -1950,14 +2035,23 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 					loBand = .aDetailBands[lnNumber, 1]
 				case lcBand = ccBAND_TITLE
 					if .lTitleBand and isnull(.oTitleBand)
-						.oTitleBand = newobject('SFReportBand', .ClassLibrary, '', ;
-							'Title', This)
+						if llOpen
+							.oTitleBand = createobject('SFReportBand', 'Title', This)
+						else
+							.oTitleBand = newobject('SFReportBand', .ClassLibrary, ;
+								'', 'Title', This)
+						endif llOpen
 					endif .lTitleBand ...
 					loBand = .oTitleBand
 				case lcBand = ccBAND_SUMMARY
 					if .lSummaryBand and isnull(.oSummaryBand)
-						.oSummaryBand = newobject('SFReportBand', .ClassLibrary, '', ;
-							'Summary', This)
+						if llOpen
+							.oSummaryBand = createobject('SFReportBand', 'Summary', ;
+								This)
+						else
+							.oSummaryBand = newobject('SFReportBand', .ClassLibrary, ;
+								'', 'Summary', This)
+						endif llOpen
 					endif .lSummaryBand ...
 					loBand = .oSummaryBand
 				case lcBand = ccBAND_GROUP_HEADER
@@ -2032,18 +2126,27 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 	ENDPROC
 
 	PROCEDURE Init
-		local loException as Exception
+		local loException as Exception, ;
+			llOpen
 		
 		* Create the objects representing bands in every report and the DE.
 		
 		with This
-			.oPageHeaderBand = newobject('SFReportBand', .ClassLibrary, '', ;
-				'Page Header', This)
-			.oDetailBand     = newobject('SFReportBand', .ClassLibrary, '', ;
-				'Detail',      This)
-			.oPageFooterBand = newobject('SFReportBand', .ClassLibrary, '', ;
-				'Page Footer', This)
-			.oDE             = newobject('SFReportDE', .ClassLibrary)
+			llOpen = upper(.ClassLibrary) $ set('CLASSLIB')
+			if llOpen
+				.oPageHeaderBand = createobject('SFReportBand', 'Page Header', This)
+				.oDetailBand     = createobject('SFReportBand', 'Detail',      This)
+				.oPageFooterBand = createobject('SFReportBand', 'Page Footer', This)
+				.oDE             = createobject('SFReportDE')
+			else
+				.oPageHeaderBand = newobject('SFReportBand', .ClassLibrary, '', ;
+					'Page Header', This)
+				.oDetailBand     = newobject('SFReportBand', .ClassLibrary, '', ;
+					'Detail',      This)
+				.oPageFooterBand = newobject('SFReportBand', .ClassLibrary, '', ;
+					'Page Footer', This)
+				.oDE             = newobject('SFReportDE', .ClassLibrary)
+			endif llOpen
 			dimension .aGroupBands[1, 2]
 			dimension .aDetailBands[1, 3]
 			.aGroupBands  = .NULL.
@@ -2054,9 +2157,9 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		
 			.SetVHFactors()
 		
-		* Fill an array with paper dimensions.
+		* Fill an array with paper dimensions (see https://docs.microsoft.com/en-us/windows/win32/intl/paper-sizes)
 		
-			dimension .aPaper[41, 2]
+			dimension .aPaper[70, 2]
 			.aPaper[ 1, 1] = 8.5
 			.aPaper[ 1, 2] = 11
 			.aPaper[ 2, 1] = 8.5
@@ -2139,6 +2242,64 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			.aPaper[40, 2] = 12
 			.aPaper[41, 1] = 8.5
 			.aPaper[41, 2] = 13
+			.aPaper[42, 1] = 250/cnDEFAULT_PRTINFO_MM
+			.aPaper[42, 2] = 353/cnDEFAULT_PRTINFO_MM
+			.aPaper[43, 1] = 100/cnDEFAULT_PRTINFO_MM
+			.aPaper[43, 2] = 148/cnDEFAULT_PRTINFO_MM
+			.aPaper[44, 1] = 9
+			.aPaper[44, 2] = 11
+			.aPaper[45, 1] = 10
+			.aPaper[45, 2] = 11
+			.aPaper[46, 1] = 15
+			.aPaper[46, 2] = 11
+			.aPaper[47, 1] = 220/cnDEFAULT_PRTINFO_MM
+			.aPaper[47, 2] = 220/cnDEFAULT_PRTINFO_MM
+			.aPaper[48, 1] = 0
+			.aPaper[48, 2] = 0
+			.aPaper[49, 1] = 0
+			.aPaper[49, 2] = 0
+			.aPaper[50, 1] = 9.5
+			.aPaper[50, 2] = 12
+			.aPaper[51, 1] = 9.5
+			.aPaper[51, 2] = 15
+			.aPaper[52, 1] = 11.69
+			.aPaper[52, 2] = 18
+			.aPaper[53, 1] = 9.27
+			.aPaper[53, 2] = 12.69
+			.aPaper[54, 1] = 8.5
+			.aPaper[54, 2] = 11
+			.aPaper[55, 1] = 210/cnDEFAULT_PRTINFO_MM
+			.aPaper[55, 2] = 297/cnDEFAULT_PRTINFO_MM
+			.aPaper[56, 1] = 9.5
+			.aPaper[56, 2] = 12
+			.aPaper[57, 1] = 227/cnDEFAULT_PRTINFO_MM
+			.aPaper[57, 2] = 356/cnDEFAULT_PRTINFO_MM
+			.aPaper[58, 1] = 305/cnDEFAULT_PRTINFO_MM
+			.aPaper[58, 2] = 487/cnDEFAULT_PRTINFO_MM
+			.aPaper[59, 1] = 8.5
+			.aPaper[59, 2] = 12.69
+			.aPaper[60, 1] = 210/cnDEFAULT_PRTINFO_MM
+			.aPaper[60, 2] = 330/cnDEFAULT_PRTINFO_MM
+			.aPaper[61, 1] = 148/cnDEFAULT_PRTINFO_MM
+			.aPaper[61, 2] = 210/cnDEFAULT_PRTINFO_MM
+			.aPaper[62, 1] = 182/cnDEFAULT_PRTINFO_MM
+			.aPaper[62, 2] = 257/cnDEFAULT_PRTINFO_MM
+			.aPaper[63, 1] = 322/cnDEFAULT_PRTINFO_MM
+			.aPaper[63, 2] = 445/cnDEFAULT_PRTINFO_MM
+			.aPaper[64, 1] = 174/cnDEFAULT_PRTINFO_MM
+			.aPaper[64, 2] = 235/cnDEFAULT_PRTINFO_MM
+			.aPaper[65, 1] = 201/cnDEFAULT_PRTINFO_MM
+			.aPaper[65, 2] = 276/cnDEFAULT_PRTINFO_MM
+			.aPaper[66, 1] = 420/cnDEFAULT_PRTINFO_MM
+			.aPaper[66, 2] = 594/cnDEFAULT_PRTINFO_MM
+			.aPaper[67, 1] = 297/cnDEFAULT_PRTINFO_MM
+			.aPaper[67, 2] = 420/cnDEFAULT_PRTINFO_MM
+			.aPaper[68, 1] = 322/cnDEFAULT_PRTINFO_MM
+			.aPaper[68, 2] = 445/cnDEFAULT_PRTINFO_MM
+			.aPaper[69, 1] = 200/cnDEFAULT_PRTINFO_MM
+			.aPaper[69, 2] = 148/cnDEFAULT_PRTINFO_MM
+			.aPaper[70, 1] = 105/cnDEFAULT_PRTINFO_MM
+			.aPaper[70, 2] = 148/cnDEFAULT_PRTINFO_MM
 		
 		* Set the default paper size.
 		
@@ -2365,7 +2526,8 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 					round(max(toRecord.Height * .nVFactor, cnFACTOR), 0))
 				if toRecord.ObjType <> cnREPOBJ_BAND
 					toRecord.Width = iif(toRecord.Width < 0, -toRecord.Width, ;
-						toRecord.Width * .nHFactor)
+						(toRecord.Width + iif(toRecord.ObjType = cnREPOBJ_FIELD, ;
+						cnWIDTH_FUDGE, 0)) * .nHFactor)
 					if toRecord.HPos < 0
 						toRecord.HPos = - toRecord.HPos
 					else
@@ -2455,7 +2617,8 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		lparameter tlValue
 		with This
 			.lLandscape   = tlValue
-			.nOrientation = iif(tlValue, 3, 2)
+			.nOrientation = iif(tlValue, cnORIENTATION_LANDSCAPE, ;
+				cnORIENTATION_PORTRAIT)
 		endwith
 		
 	ENDPROC
@@ -2469,7 +2632,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		lcReportFile = iif(vartype(tcReportFile) <> 'C' or empty(tcReportFile), ;
 			This.cReportFile, tcReportFile)
 		if empty(lcReportFile)
-			error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+			if type('oLocalizer') = 'O'
+				error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+			else
+				error 'The name of the report file was not specified.'
+			endif type('oLocalizer') = 'O'
 			return .F.
 		endif empty(lcReportFile)
 		if not file(lcReportFile)
@@ -2494,6 +2661,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			lnBands, ;
 			lnGroups, ;
 			llSortBands, ;
+			llOpen, ;
 			lnHeight, ;
 			lnWidth, ;
 			lnHPos, ;
@@ -2519,7 +2687,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* Ensure a report file is open.
 		
 			if empty(alias())
-				error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+				if type('oLocalizer') = 'O'
+					error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+				else
+					error 'The name of the report file was not specified.'
+				endif type('oLocalizer') = 'O'
 				return .F.
 			endif empty(alias())
 		
@@ -2530,7 +2702,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* Create OBJECTS and BANDS cursors to help decide what band each object
 		* belongs to.
 		
-			loFRXCursor = newobject('FRXCursor', home() + 'FFC\_FRXCursor.vcx')
+			if file('_FRXCursor.vcx')
+				loFRXCursor = newobject('FRXCursor', '_FRXCursor.vcx')
+			else
+				loFRXCursor = newobject('FRXCursor', home() + 'FFC\_FRXCursor.vcx')
+			endif file('_FRXCursor.vcx')
 			loFRXCursor.ScreenDPI = cnSCREEN_DPI
 			loFRXCursor.CreateObjectCursor()
 		
@@ -2539,6 +2715,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			lnBands     = 0
 			lnGroups    = 0
 			llSortBands = .F.
+			llOpen      = upper(.ClassLibrary) $ set('CLASSLIB')
 			scan for PLATFORM = 'WINDOWS'
 		
 		* Convert the height, width, and horizontal position into negative values so
@@ -2584,30 +2761,32 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* Get information about the report from the report header record.
 		
 					case ObjType = cnREPOBJ_HEADER
-						.nColumns        = VPos
-						.nLeftMargin     = HPos
-						.nColumnSpacing  = Height
-						.lWholePage      = Top
-						.lPrintColumns   = Bottom
-						.lSetHeaderWidth = .nColumns > 1
-						.nWidth          = lnWidth
-						.nOrientation    = iif ('ORIENTATION=1' $ EXPR, 2, 0)
-						.cFontName       = iif(empty(FontFace), .cFontName, FontFace)
-						.nFontSize       = iif(empty(FontSize), .nFontSize, FontSize)
-						.nFontStyle      = FontStyle
-						.cMemberData     = Style
-						.nRulerScale     = Ruler
-						lcPaperSize      = strextract(Expr, 'PAPERSIZE=', ccLF)
+						lcPaperSize = strextract(Expr, 'PAPERSIZE=', ccLF)
 						if not empty(lcPaperSize)
 							.nPaperSize = val(lcPaperSize)
 						endif not empty(lcPaperSize)
+						.nLeftMargin    = HPos
+						.nColumnSpacing = Height
+						.lWholePage     = Top
+						.lPrintColumns  = Bottom
+						.nOrientation   = iif ('ORIENTATION=1' $ EXPR, ;
+							cnORIENTATION_LANDSCAPE, 0)
+						.nColumns       = VPos
+						if .lSetHeaderWidth
+							.nWidth = lnWidth
+						endif .lSetHeaderWidth
+						.cFontName   = iif(empty(FontFace), .cFontName, FontFace)
+						.nFontSize   = iif(empty(FontSize), .nFontSize, FontSize)
+						.nFontStyle  = FontStyle
+						.cMemberData = Style
+						.nRulerScale = Ruler
 						lcDefaultSource = strextract(Expr, 'DEFAULTSOURCE=', ccLF)
 						if not empty(lcDefaultSource)
 							.nDefaultSource = val(lcDefaultSource)
 						endif not empty(lcDefaultSource)
-						lcDevice        = strextract(Expr, 'DEVICE=', ccLF)
-						lcTag           = strconv(Tag,  14)
-						lcTag2          = strconv(Tag2, 14)
+						lcDevice = strextract(Expr, 'DEVICE=', ccLF)
+						lcTag    = strconv(Tag,  14)
+						lcTag2   = strconv(Tag2, 14)
 						if not empty(lcDevice)
 							.cDevice = lcDevice
 							.cTag    = lcTag
@@ -2631,18 +2810,28 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		
 							case ObjCode = cnREPOBJ_CODE_TITLE
 								.lTitleBand = .T.
-								.oTitleBand = newobject('SFReportBand', ;
-									.ClassLibrary, '', 'Title', This)
-								loBand      = .oTitleBand
+								if llOpen
+									.oTitleBand = createobject('SFReportBand', ;
+										'Title', This)
+								else
+									.oTitleBand = newobject('SFReportBand', ;
+										.ClassLibrary, '', 'Title', This)
+								endif llOpen
+								loBand = .oTitleBand
 		
 		* If this is the summary band, flag that we have one, create an object for it,
 		* and set some properties.
 		
 							case ObjCode = cnREPOBJ_CODE_SUMMARY
 								.lSummaryBand = .T.
-								.oSummaryBand = newobject('SFReportBand', ;
-									.ClassLibrary, '', 'Summary', This)
-								loBand        = .oSummaryBand
+								if llOpen
+									.oSummaryBand = createobject('SFReportBand', ;
+										'Summary', This)
+								else
+									.oSummaryBand = newobject('SFReportBand', ;
+										.ClassLibrary, '', 'Summary', This)
+								endif llOpen
+								loBand = .oSummaryBand
 		
 		* In the case of page header, page footer, and detail band records, just grab
 		* a reference to the existing object.
@@ -2657,10 +2846,17 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* Handle detail header and footer bands.
 		
 							case ObjCode = cnREPOBJ_CODE_DETHEADER
-								.oDetailHeaderBand = newobject('SFReportBand', ;
-									.ClassLibrary, '', 'Detail Header', This)
-								.oDetailFooterBand = newobject('SFReportBand', ;
-									.ClassLibrary, '', 'Detail Footer', This)
+								if llOpen
+									.oDetailHeaderBand = createobject('SFReportBand', ;
+										'Detail Header', This)
+									.oDetailFooterBand = createobject('SFReportBand', ;
+										'Detail Footer', This)
+								else
+									.oDetailHeaderBand = newobject('SFReportBand', ;
+										.ClassLibrary, '', 'Detail Header', This)
+									.oDetailFooterBand = newobject('SFReportBand', ;
+										.ClassLibrary, '', 'Detail Footer', This)
+								endif llOpen
 								loBand = .oDetailHeaderBand
 							case ObjCode = cnREPOBJ_CODE_DETFOOTER
 								loBand = .oDetailFooterBand
@@ -2786,10 +2982,17 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 			.nColumns = tnValue
 			do case
 				case tnValue > 1 and vartype(.oColumnHeaderBand) <> 'O'
-					.oColumnHeaderBand = newobject('SFReportBand', .ClassLibrary, '', ;
-						'Column Header', This)
-					.oColumnFooterBand = newobject('SFReportBand', .ClassLibrary, '', ;
-						'Column Footer', This)
+					if upper(.ClassLibrary) $ set('CLASSLIB')
+						.oColumnHeaderBand = createobject('SFReportBand', ;
+							'Column Header', This)
+						.oColumnFooterBand = createobject('SFReportBand', ;
+							'Column Footer', This)
+					else
+						.oColumnHeaderBand = newobject('SFReportBand', .ClassLibrary, ;
+							'', 'Column Header', This)
+						.oColumnFooterBand = newobject('SFReportBand', .ClassLibrary, ;
+							'', 'Column Footer', This)
+					endif upper(.ClassLibrary) $ set('CLASSLIB')
 				case tnValue = 1 and vartype(.oColumnHeaderBand) = 'O'
 					.oColumnHeaderBand.Release()
 					.oColumnFootBand.Release()
@@ -2883,7 +3086,11 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* Ensure a report file was specified.
 		
 			if empty(.cReportFile)
-				error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+				if type('oLocalizer') = 'O'
+					error oLocalizer.GetLocalizedString('ERR_NO_REPORT_FILE')
+				else
+					error 'The name of the report file was not specified.'
+				endif type('oLocalizer') = 'O'
 				return .F.
 			endif empty(.cReportFile)
 		
@@ -3059,11 +3266,12 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		* print it in landscape, switch to landscape.
 			
 			go top
-			llLandscape = .nOrientation = 2
+			llLandscape = .nOrientation = cnORIENTATION_LANDSCAPE
 			if .nPaperWidth = 0
 				.GetPaperWidth(llLandscape)
 			endif .nPaperWidth = 0
-			if llLandscape or (.nRepWidth > .nMinPaperWidth and .nOrientation = 0)
+			if llLandscape or (.nRepWidth > .nMinPaperWidth and ;
+				.nOrientation = cnORIENTATION_AUTO)
 				replace EXPR with 'ORIENTATION=1'
 				if not llLandscape and not .lUsingLandscape
 					lnTemp        = .nPaperWidth
@@ -3102,7 +3310,7 @@ DEFINE CLASS sfreportfile AS sfreportbase OF "sfrepobj.vcx" 		&& Main report obj
 		with This
 			if .nColumns > 1
 				.lSetHeaderWidth = .T.
-				llLandscape      = .nOrientation = 2
+				llLandscape      = .nOrientation = cnORIENTATION_LANDSCAPE
 				lnColumnSpacing  = iif(.nColumnSpacing < 0, -.nColumnSpacing, ;
 					.nColumnSpacing * .nHFactor)
 				lnLeftMargin     = iif(.nLeftMargin < 0, -.nLeftMargin, ;

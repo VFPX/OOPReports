@@ -370,6 +370,18 @@ See [How to contribute to OOP Reports](.github/CONTRIBUTING.md) for details on h
 
 ## Releases
 
+### 2022-06-13
+
+* Fixed typo in LoadFromCursor.
+
+* Added more constants to SFRepObj.h and made methods in SFReportFile use them instead of hard-coded values.
+
+* Made SFReportFile.LoadFromCursor not set nWidth unless nColumns is > 1 and set several properties needed by SetColumnWidth before setting nColumns. Added nCustomWidth and made GetPaperWidth use it rather than nWidth, which is just for column width.
+
+* Added more paper sizes to SFReportFile.aPaper.
+
+* Made SFReportFile only call methods of oLocalizer if it exists.
+
 ### 2019-06-27
 
 * Initial release.
